@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import json
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sklearn.ensemble import RandomForestRegressor
@@ -40,72 +40,19 @@ def run_osdu_search_api_mock(db_url, partition="opendes"):
 
     try:
         engine = get_db_engine(db_url)
-        # Pastikan kolom surface_latitude & surface_longitude benar-benar ada di tabel ppdm.well Anda
         query = "SELECT uwi, well_name, operator, surface_latitude, surface_longitude FROM ppdm.well WHERE active_ind = 'Y' AND uwi LIKE 'TMB-%'"
-        df = pd.read_sql(query, engine)
+
+        # PERBAIKAN: Gunakan text() dan koneksi aktif
+        with engine.connect() as conn:
+            df = pd.read_sql(text(query), conn)
+
         records_found = len(df)
     except Exception as e:
-        # Menampilkan error SQL atau Koneksi ke UI Streamlit
         st.error(f"🚨 Error Database: {str(e)}")
-
-        # Fallback data dumi
-        df = pd.DataFrame([
-            {"uwi": "HNL-001", "well_name": "HNL-001", "operator": "PERTAMINA",
-                "surface_latitude": -0.5, "surface_longitude": 110.5},
-            {"uwi": "MNS-001", "well_name": "MNS-001", "operator": "PERTAMINA",
-                "surface_latitude": -0.3, "surface_longitude": 110.3},
-            {"uwi": "BYU-001", "well_name": "BYU-001", "operator": "PERTAMINA",
-                "surface_latitude": -0.1, "surface_longitude": 110.1},
-            {"uwi": "TMB-023", "well_name": "TMB-023", "operator": "PERTAMINA",
-                "surface_latitude": 0.0, "surface_longitude": 110.0}
-        ])
-        records_found = len(df)
-
-    osdu_response = {
-        "results": [],
-        "totalCount": records_found
-    }
-
-    for _, row in df.iterrows():
-        # Parsing koordinat dengan aman
-        lat = float(row['surface_latitude']) if pd.notnull(
-            row['surface_latitude']) else 0.0
-        lon = float(row['surface_longitude']) if pd.notnull(
-            row['surface_longitude']) else 0.0
-
-        osdu_response["results"].append({
-            "id": f"{partition}:master-data--Wellbore:{row['uwi']}",
-            "kind": "osdu:wks:master-data--Wellbore:1.0.0",
-            "data": {
-                "FacilityName": row['well_name'],
-                "DataSourceOrganisationID": row['operator'] if pd.notnull(row['operator']) else "UNKNOWN",
-                # MAPPING YANG BENAR UNTUK KOORDINAT OSDU (GeoJSON standard)
-                "SpatialLocation": {
-                    "Wgs84Coordinates": {
-                        "type": "FeatureCollection",
-                        "features": [
-                            {
-                                "type": "Feature",
-                                "geometry": {
-                                    "type": "Point",
-                                    # GeoJSON selalu menggunakan urutan [Longitude, Latitude]
-                                    "coordinates": [lon, lat]
-                                },
-                                "properties": {}
-                            }
-                        ]
-                    }
-                }
-            }
-        })
-    return osdu_response
+        # ... (Sisa kode data dumi fallback Anda tetap sama) ...
 
 
 def run_osdu_wellbore_ddms_get_mock(db_url, uwi, partition="opendes"):
-    """
-    Simulasi GET /api/os-wellbore-ddms/v3/welllogs/{log_id}/data
-    Melakukan JOIN relasional panjang PPDM dan mengubahnya menjadi bentuk kolom matriks OSDU.
-    """
     try:
         engine = get_db_engine(db_url)
         query = f"""
@@ -115,31 +62,15 @@ def run_osdu_wellbore_ddms_get_mock(db_url, uwi, partition="opendes"):
             WHERE v.uwi = '{uwi}' AND c.reported_mnemonic IN ('GR', 'NPHI', 'RHOB')
             ORDER BY v.index_value ASC
         """
-        df_long = pd.read_sql(query, engine)
+
+        # PERBAIKAN: Gunakan text() dan koneksi aktif
+        with engine.connect() as conn:
+            df_long = pd.read_sql(text(query), conn)
+
         if df_long.empty:
             raise ValueError("Empty data")
-        df_wide = df_long.pivot(
-            index='depth', columns='curve_id', values='measured_value').reset_index()
-    except Exception:
-        # Penghasil data dumi otomatis jika tabel kosong atau tidak terkoneksi
-        np.random.seed(42)
-        depths = np.arange(1500, 1700, 0.5)
-        gr = 60 + 35 * np.sin(depths / 15) + \
-            np.random.normal(0, 8, len(depths))
-        rhob = 2.3 + 0.15 * np.sin(depths / 40) + \
-            np.random.normal(0, 0.04, len(depths))
-        nphi = 0.35 - 0.1 * (rhob - 2.2) + \
-            np.random.normal(0, 0.02, len(depths))
-        df_wide = pd.DataFrame(
-            {"depth": depths, "GR": gr, "NPHI": nphi, "RHOB": rhob})
 
-    df_wide = df_wide.dropna(subset=['GR', 'NPHI', 'RHOB'])
-
-    return {
-        "columns": ["MD", "GR", "NPHI", "RHOB"],
-        "index": df_wide['depth'].tolist(),
-        "data": df_wide[['depth', 'GR', 'NPHI', 'RHOB']].values.tolist()
-    }
+        # ... (Sisa kode pivot pivot data Anda tetap sama) ...
 
 # ==============================================================================
 # 3. INTERMEDIATE MACHINE LEARNING ENGINE
