@@ -38,20 +38,20 @@ def run_osdu_search_api_mock(db_url, partition="opendes"):
     """
     try:
         engine = get_db_engine(db_url)
-        query = "SELECT uwi, well_name, operator, total_depth, total_depth_ouom FROM ppdm.well WHERE active_ind = 'Y'"
+        query = "SELECT uwi, well_name, operator, surface_latitude, surface_longitude FROM ppdm.well WHERE active_ind = 'Y'"
         df = pd.read_sql(query, engine)
         records_found = len(df)
     except Exception:
         # Fallback data dumi jika database offline agar presentasi tetap berjalan lancar
         df = pd.DataFrame([
             {"uwi": "HNL-001", "well_name": "HNL-001", "operator": "PERTAMINA",
-                "total_depth": 3450.0, "total_depth_ouom": "M"},
+                "surface_latitude": -0.5, "surface_longitude": 110.5},
             {"uwi": "MNS-001", "well_name": "MNS-001", "operator": "PERTAMINA",
-                "total_depth": 1850.0, "total_depth_ouom": "M"},
+                "surface_latitude": -0.3, "surface_longitude": 110.3},
             {"uwi": "BYU-001", "well_name": "BYU-001", "operator": "PERTAMINA",
-                "total_depth": 3280.0, "total_depth_ouom": "M"},
+                "surface_latitude": -0.1, "surface_longitude": 110.1},
             {"uwi": "TMB-023", "well_name": "TMB-023", "operator": "PERTAMINA",
-                "total_depth": 2500.0, "total_depth_ouom": "M"}
+                "surface_latitude": 0.0, "surface_longitude": 110.0}
         ])
         records_found = len(df)
 
