@@ -36,13 +36,19 @@ def run_osdu_search_api_mock(db_url, partition="opendes"):
     Simulasi POST /api/search/v2/query
     Menarik metadata sumur aktif dari PPDM dan mengemasnya ke format OSDU Record WKS.
     """
+    import streamlit as st
+
     try:
         engine = get_db_engine(db_url)
+        # Pastikan kolom surface_latitude & surface_longitude benar-benar ada di tabel ppdm.well Anda
         query = "SELECT uwi, well_name, operator, surface_latitude, surface_longitude FROM ppdm.well WHERE active_ind = 'Y' AND uwi LIKE 'TMB-%'"
         df = pd.read_sql(query, engine)
         records_found = len(df)
-    except Exception:
-        # Fallback data dumi jika database offline agar presentasi tetap berjalan lancar
+    except Exception as e:
+        # Menampilkan error SQL atau Koneksi ke UI Streamlit
+        st.error(f"🚨 Error Database: {str(e)}")
+
+        # Fallback data dumi
         df = pd.DataFrame([
             {"uwi": "HNL-001", "well_name": "HNL-001", "operator": "PERTAMINA",
                 "surface_latitude": -0.5, "surface_longitude": 110.5},
@@ -61,18 +67,35 @@ def run_osdu_search_api_mock(db_url, partition="opendes"):
     }
 
     for _, row in df.iterrows():
+        # Parsing koordinat dengan aman
+        lat = float(row['surface_latitude']) if pd.notnull(
+            row['surface_latitude']) else 0.0
+        lon = float(row['surface_longitude']) if pd.notnull(
+            row['surface_longitude']) else 0.0
+
         osdu_response["results"].append({
             "id": f"{partition}:master-data--Wellbore:{row['uwi']}",
             "kind": "osdu:wks:master-data--Wellbore:1.0.0",
             "data": {
                 "FacilityName": row['well_name'],
-                "DataSourceOrganisationID": row['operator'] if row['operator'] else "UNKNOWN",
-                "VerticalMeasurements": [
-                    {
-                        "VerticalMeasurement": float(row['surface_latitude']) if row['surface_latitude'] else 0.0,
-                        "VerticalMeasurementUnitID": f"{partition}:reference-data--UnitOfMeasure:{row['surface_longitude'] if row['surface_longitude'] else 'DEG'}:"
+                "DataSourceOrganisationID": row['operator'] if pd.notnull(row['operator']) else "UNKNOWN",
+                # MAPPING YANG BENAR UNTUK KOORDINAT OSDU (GeoJSON standard)
+                "SpatialLocation": {
+                    "Wgs84Coordinates": {
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "Point",
+                                    # GeoJSON selalu menggunakan urutan [Longitude, Latitude]
+                                    "coordinates": [lon, lat]
+                                },
+                                "properties": {}
+                            }
+                        ]
                     }
-                ]
+                }
             }
         })
     return osdu_response
