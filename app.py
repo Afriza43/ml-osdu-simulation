@@ -313,21 +313,39 @@ with tab_pipeline:
 
     # --- TAHAP 1 ---
     st.subheader("Tahap 1: Well Discovery via Search Service")
-    st.markdown("[🔗 **Referensi API:** `POST /api/search/v2/query`](https://community.opengroup.org/osdu/platform/system/search/-/blob/master/docs/api/search_openapi.yaml) — *Mencari ID Sumur bawah permukaan menggunakan Elasticsearch query.*")
+    st.markdown("[🔗 **Referensi API:** `POST /api/search/v2/query`](https://community.opengroup.org/osdu/platform/system/search/-/blob/master/docs/api/search_openapi.yaml) — *Mencari ID Sumur spesifik bawah permukaan menggunakan Elasticsearch query.*")
+
     col1, col2 = st.columns(2)
     with col1:
         st.caption("**💡 HTTP Request Payload (POST)**")
+        # Mengambil uwi yang sedang aktif dipilih di sidebar
+        target_uwi = st.session_state['selected_uwi'] if st.session_state['selected_uwi'] else "HNL-001"
+
         search_request = {
             "kind": "osdu:wks:master-data--Wellbore:1.0.0",
-            "query": f"data.DataSourceOrganisationID: \"PERTAMINA\"",
+            # Mengubah query agar mencari secara spesifik sumur yang dipilih
+            "query": f"id: \"{partition_id}:master-data--Wellbore:{target_uwi}\"",
             "returnedFields": ["id", "data.FacilityName", "data.VerticalMeasurements"]
         }
         st.code(
             f"POST /api/search/v2/query\nHeaders: {{ 'data-partition-id': '{partition_id}' }}\n\nBody:\n{json.dumps(search_request, indent=2)}", language="json")
+
     with col2:
         st.caption("**📥 HTTP Response Payload (JSON)**")
         if st.session_state['search_data'] is not None:
-            st.json(st.session_state['search_data'])
+            # Filter response: HANYA menampilkan data yang cocok dengan Target Wellbore
+            target_id = f"{partition_id}:master-data--Wellbore:{target_uwi}"
+            filtered_results = [
+                item for item in st.session_state['search_data']['results']
+                if item['id'] == target_id
+            ]
+
+            # Membentuk struktur JSON baru yang hanya berisi 1 sumur pilihan
+            filtered_response = {
+                "results": filtered_results,
+                "totalCount": len(filtered_results)
+            }
+            st.json(filtered_response)
         else:
             st.info(
                 "Klik tombol 'Trigger OSDU Discovery' di sidebar terlebih dahulu.")
