@@ -53,6 +53,10 @@ def run_osdu_search_api_mock(db_url, partition="opendes"):
 
 
 def run_osdu_wellbore_ddms_get_mock(db_url, uwi, partition="opendes"):
+    """
+    Simulasi GET /api/os-wellbore-ddms/v3/welllogs/{log_id}/data
+    Melakukan JOIN relasional panjang PPDM dan mengubahnya menjadi bentuk kolom matriks OSDU.
+    """
     try:
         engine = get_db_engine(db_url)
         query = f"""
@@ -62,15 +66,33 @@ def run_osdu_wellbore_ddms_get_mock(db_url, uwi, partition="opendes"):
             WHERE v.uwi = '{uwi}' AND c.reported_mnemonic IN ('GR', 'NPHI', 'RHOB')
             ORDER BY v.index_value ASC
         """
-
-        # PERBAIKAN: Gunakan text() dan koneksi aktif
         with engine.connect() as conn:
             df_long = pd.read_sql(text(query), conn)
-
         if df_long.empty:
             raise ValueError("Empty data")
+        df_wide = df_long.pivot(
+            index='depth', columns='curve_id', values='measured_value').reset_index()
+    except Exception:
+        # Penghasil data dumi otomatis jika tabel kosong atau tidak terkoneksi
+        np.random.seed(42)
+        depths = np.arange(1500, 1700, 0.5)
+        gr = 60 + 35 * np.sin(depths / 15) + \
+            np.random.normal(0, 8, len(depths))
+        rhob = 2.3 + 0.15 * np.sin(depths / 40) + \
+            np.random.normal(0, 0.04, len(depths))
+        nphi = 0.35 - 0.1 * (rhob - 2.2) + \
+            np.random.normal(0, 0.02, len(depths))
+        df_wide = pd.DataFrame(
+            {"depth": depths, "GR": gr, "NPHI": nphi, "RHOB": rhob})
 
-        # ... (Sisa kode pivot pivot data Anda tetap sama) ...
+    df_wide = df_wide.dropna(subset=['GR', 'NPHI', 'RHOB'])
+
+    return {
+        "columns": ["MD", "GR", "NPHI", "RHOB"],
+        "index": df_wide['depth'].tolist(),
+        "data": df_wide[['depth', 'GR', 'NPHI', 'RHOB']].values.tolist()
+    }
+
 
 # ==============================================================================
 # 3. INTERMEDIATE MACHINE LEARNING ENGINE
