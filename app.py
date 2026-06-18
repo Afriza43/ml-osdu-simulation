@@ -40,16 +40,68 @@ def run_osdu_search_api_mock(db_url, partition="opendes"):
 
     try:
         engine = get_db_engine(db_url)
+        # Pastikan kolom surface_latitude & surface_longitude benar-benar ada di tabel ppdm.well Anda
         query = "SELECT uwi, well_name, operator, surface_latitude, surface_longitude FROM ppdm.well WHERE active_ind = 'Y' AND uwi LIKE 'TMB-%'"
 
-        # PERBAIKAN: Gunakan text() dan koneksi aktif
         with engine.connect() as conn:
             df = pd.read_sql(text(query), conn)
 
         records_found = len(df)
     except Exception as e:
+        # Menampilkan error SQL atau Koneksi ke UI Streamlit
         st.error(f"🚨 Error Database: {str(e)}")
-        # ... (Sisa kode data dumi fallback Anda tetap sama) ...
+
+        # Fallback data dumi
+        df = pd.DataFrame([
+            {"uwi": "HNL-001", "well_name": "HNL-001", "operator": "PERTAMINA",
+                "surface_latitude": -0.5, "surface_longitude": 110.5},
+            {"uwi": "MNS-001", "well_name": "MNS-001", "operator": "PERTAMINA",
+                "surface_latitude": -0.3, "surface_longitude": 110.3},
+            {"uwi": "BYU-001", "well_name": "BYU-001", "operator": "PERTAMINA",
+                "surface_latitude": -0.1, "surface_longitude": 110.1},
+            {"uwi": "TMB-023", "well_name": "TMB-023", "operator": "PERTAMINA",
+                "surface_latitude": 0.0, "surface_longitude": 110.0}
+        ])
+        records_found = len(df)
+
+    osdu_response = {
+        "results": [],
+        "totalCount": records_found
+    }
+
+    for _, row in df.iterrows():
+        # Parsing koordinat dengan aman
+        lat = float(row['surface_latitude']) if pd.notnull(
+            row['surface_latitude']) else 0.0
+        lon = float(row['surface_longitude']) if pd.notnull(
+            row['surface_longitude']) else 0.0
+
+        osdu_response["results"].append({
+            "id": f"{partition}:master-data--Wellbore:{row['uwi']}",
+            "kind": "osdu:wks:master-data--Wellbore:1.0.0",
+            "data": {
+                "FacilityName": row['well_name'],
+                "DataSourceOrganisationID": row['operator'] if pd.notnull(row['operator']) else "UNKNOWN",
+                # MAPPING YANG BENAR UNTUK KOORDINAT OSDU (GeoJSON standard)
+                "SpatialLocation": {
+                    "Wgs84Coordinates": {
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "Point",
+                                    # GeoJSON selalu menggunakan urutan [Longitude, Latitude]
+                                    "coordinates": [lon, lat]
+                                },
+                                "properties": {}
+                            }
+                        ]
+                    }
+                }
+            }
+        })
+    return osdu_response
 
 
 def run_osdu_wellbore_ddms_get_mock(db_url, uwi, partition="opendes"):
@@ -92,7 +144,6 @@ def run_osdu_wellbore_ddms_get_mock(db_url, uwi, partition="opendes"):
         "index": df_wide['depth'].tolist(),
         "data": df_wide[['depth', 'GR', 'NPHI', 'RHOB']].values.tolist()
     }
-
 
 # ==============================================================================
 # 3. INTERMEDIATE MACHINE LEARNING ENGINE
