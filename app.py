@@ -38,7 +38,7 @@ def run_osdu_search_api_mock(db_url, partition="opendes"):
     """
     try:
         engine = get_db_engine(db_url)
-        query = "SELECT uwi, well_name, operator, surface_latitude, surface_longitude FROM ppdm.well WHERE active_ind = 'Y' WHERE well_name LIKE 'TMB%"
+        query = "SELECT uwi, well_name, operator, surface_latitude, surface_longitude FROM ppdm.well WHERE active_ind = 'Y' WHERE uwi LIKE 'TMB%"
         df = pd.read_sql(query, engine)
         records_found = len(df)
     except Exception:
