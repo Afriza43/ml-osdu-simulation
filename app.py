@@ -69,8 +69,8 @@ def run_osdu_search_api_mock(db_url, partition="opendes"):
                 "DataSourceOrganisationID": row['operator'] if row['operator'] else "UNKNOWN",
                 "VerticalMeasurements": [
                     {
-                        "VerticalMeasurement": float(row['total_depth']) if row['total_depth'] else 0.0,
-                        "VerticalMeasurementUnitID": f"{partition}:reference-data--UnitOfMeasure:{row['total_depth_ouom'] if row['total_depth_ouom'] else 'M'}:"
+                        "VerticalMeasurement": float(row['surface_latitude']) if row['surface_latitude'] else 0.0,
+                        "VerticalMeasurementUnitID": f"{partition}:reference-data--UnitOfMeasure:{row['surface_longitude'] if row['surface_longitude'] else 'DEG'}:"
                     }
                 ]
             }
